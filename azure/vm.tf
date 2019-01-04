@@ -14,7 +14,7 @@ resource "azurerm_resource_group" "test" {
 } 
 
 resource "azurerm_virtual_network" "main" {
-  name                = "${var.name}-VNET"
+  name                = "puppet-VNET"
   address_space       = ["10.0.0.0/16"]
   location            = "${azurerm_resource_group.test.location}"
   resource_group_name = "${azurerm_resource_group.test.name}"
@@ -32,12 +32,14 @@ resource "azurerm_public_ip" "test" {
   resource_group_name = "${var.name}"
   location            = "${azurerm_resource_group.test.location}"
   public_ip_address_allocation = "dynamic"
+  depends_on = ["azurerm_subnet.internal"]
 }
 
 resource "azurerm_network_interface" "test" {
   name = "${var.name}-nic"
   resource_group_name = "${var.name}"
   location = "${var.location}"
+  depends_on = ["azurerm_public_ip.test"]
 
   ip_configuration {
    name = "${var.name}-ip"
@@ -53,6 +55,7 @@ resource "azurerm_virtual_machine" "test" {
   location = "${var.location}"
   network_interface_ids = ["${azurerm_network_interface.test.id}"]
   vm_size = "Standard_D2s_v3"
+  depends_on = ["azurerm_network_interface.test"]
 
 storage_image_reference {
   publisher = "Canonical" 
@@ -87,21 +90,26 @@ resource "azurerm_virtual_machine_extension" "test" {
   resource_group_name = "${var.name}" 
   location = "${var.location}"
   virtual_machine_name = "${var.name}-vm" 
-  publisher = "Microsoft.OSTCExtensions"
-  type = "CustomScriptForLinux"
-  type_handler_version = "1.2"
-
+  publisher = "Microsoft.Azure.Extensions"
+  type = "CustomScript"
+  type_handler_version = "2.0"
+  depends_on = ["azurerm_virtual_machine.test"]
   settings = <<SETTINGS
   {
-    "commandToExecute" : "curl -O https://apt.puppetlabs.com/puppetlabs-release-pc1-xenial.deb && sudo -s dpkg -i puppetlabs-release-pc1-xenial.deb"
+    "fileUris" : ["https://raw.githubusercontent.com/punedhir/Terraform/master/azure/${var.puppetin}.sh"]
   }
 SETTINGS
-
+  protected_settings = <<PROTECTED_SETTINGS
+  {
+    "commandToExecute" : "bash ${var.puppetin}.sh" 
+  }
+PROTECTED_SETTINGS
 }
 
-# && dpkg -i puppetlabs-release-pc1-xenial.deb && apt-get --assume-yes update && apt-get --assume-yes install ${var.puppetin}" 
 
 
+#    "fileUris" : "https://github.com/punedhir/Terraform/blob/master/azure/${var.puppetin}.sh"
+#    "commandToExecute" : "bash ${var.puppetin}.sh" 
 
 
 
